@@ -4,6 +4,7 @@
 '''
     确认环境上装有 python 2.7.x 版本
     此脚本依赖python第三方库：pymysql
+    后台运行 nohup python xxxxxx.py >/dev/null 2>&1 &
 '''
 
 
@@ -21,21 +22,22 @@ import stat
 server_vip = '172.16.131.48' #在引号里填写集群vip
 mysql_username = 'root'  #在引号里填写mysql用户名
 mysql_passwd = '123456'  #在引号里填写mysql密码
-lockfile = 'drop_history_tables.lock'
+lockfile = "/infinityfs1/hivedata-bak/config/drop_history_tables.lock"
 logfile = 'drop_history_tables.log'
-config_file="/infinityfs1/hivedata-bak/config/hive_backup.cfg"
-time_file='time'
+config_file = "/infinityfs1/hivedata-bak/config/hive_backup.cfg"
+time_file = "/infinityfs1/hivedata-bak/config/drop_history_tables.time"
 
 
 
 def newcmp(a,b):
-    #定义函数判断日期前的字符是否相同
+    #定义函数判断日期前的字符是否相同，不同返回a
     a_re = re.match(r'^(\w+)_(20[0-9]{4})$', a)
     b_re = re.match(r'^(\w+)_(20[0-9]{4})$', b)
     if a_re.group(1) != b_re.group(1):
         return a
 
 def read_config(config_file,item):
+    #配置获取配置文件中的数据
     content=''
     try:
         with open(config_file,'r') as fcon:
@@ -49,13 +51,14 @@ def read_config(config_file,item):
     return content
 
 def drop_history_tables():
-    # 建立连接
+    # 建立mysql连接
     try:
         connection = pymysql.connect(host=server_vip, port=3306, user=mysql_username, passwd=mysql_passwd, db='information_schema')
     except Exception as e:
         print("Connect Failed---->%s" % e)
         logging.error("%s", e)
-        sys.exit(1)
+        connection.close()
+        return False
 
     with connection.cursor() as cur:
         # 查询历史数据表(所有日期结尾的表)
@@ -64,7 +67,8 @@ def drop_history_tables():
         except Exception as e:
             print("Execute Failed---->%s" % e)
             logging.error("%s", e)
-            sys.exit(1)
+            connection.close()
+            return False
         result = cur.fetchall()
 
         print("The number of historical tables is %d :" % count)
@@ -79,7 +83,7 @@ def drop_history_tables():
         logging.info("all_list---->%s", all_list)
 
 
-        #找出新表和旧表
+        #找出新表和旧表，因为排过序，所以同一种表的最新归档表就在右边，当检测到2张表不一致时，左边的那张表就是该种表的新表
         new_list = []
         old_list = all_list[:]
         for i in range(count-1):
@@ -93,7 +97,9 @@ def drop_history_tables():
             new_list.append(all_list[-1:][0])
             old_list.remove(all_list[-1:][0])
         except IndexError as e:
+            #这里是为了处理归档表还没生成的时情况
             logging.error("%s", e)
+            connection.close()
             return False
             
 
@@ -126,6 +132,7 @@ def drop_history_tables():
 
 
 def get_excute_time(time_file,new_excute_time):
+    #获取时间文件中的数据，如果不存在就创建时间文件
     excute_time=''
     status=False
     #如果文件存在且记录的内容正确则置标志位True
@@ -177,24 +184,31 @@ if __name__ == '__main__':
     while True:
         time.sleep(3600)
         with open(lockfile, 'w') as f:
+            #获取锁
             try:
 	            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except Exception as e:
+                #获取锁失败
 	        print("Failed to acquire lock")
 	        logging.error("Failed to acquire lock!-->%s", e)
 	        fcntl.flock(f,fcntl.LOCK_UN)
 	        continue
+
+            #获取锁成功，打印日志
+	    print(write_lock('Lock.txt'))
+            logging.info("Successfully acquire lock!")
             #获取时间文件
             status,excute_time=get_excute_time(time_file,new_excute_time)
             print (" old excute_time is :%s"%excute_time)
 
-            
+            #如果之前没有运行过就会立即运行一次
             if status==False:
                 conti = drop_history_tables()
                 if conti == False:
                     fcntl.flock(f,fcntl.LOCK_UN)
                     continue
             else:
+                #之前运行过，时间脚本存在
                 #处理时间逻辑
                 excute_time_day=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',excute_time).group(1),'%Y-%m-%d')
                 print("excute_time_day is %s:" %excute_time_day) 
@@ -207,15 +221,16 @@ if __name__ == '__main__':
                         #处理时刻
                         now_time=datetime.datetime.strptime(datetime.datetime.now().strftime('%H-%M-%S'),'%H-%M-%S')
                         print("time now is %s " % now_time)
-                        last_time=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',excute_time).group(2),'%H-%M-%S')
+                        #last_time=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',excute_time).group(2),'%H-%M-%S')
+                        last_time=datetime.datetime.strptime(clear_time,'%H-%M-%S')
                         print("time now is %s " % last_time)
-                                    
+                        #真正的运行时间其实是一个范围，配置文件中的MYSQL_CLEAR_TIME加上sleep的时间之间            
                         if 0 <= (now_time-last_time).seconds < 3600:
                             #执行清除历史数据表的操作
                             conti = drop_history_tables()
                             if conti == False:
                                 fcntl.flock(f,fcntl.LOCK_UN)
                                 continue
-
-                fcntl.flock(f,fcntl.LOCK_UN)
+            time.sleep(3600)
+            fcntl.flock(f,fcntl.LOCK_UN)
           
