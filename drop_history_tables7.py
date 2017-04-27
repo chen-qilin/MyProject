@@ -19,8 +19,8 @@ import stat
 __Author__ = 'chenqilin'
 
 server_vip = '172.16.131.48' # 在引号里填写集群vip
-mysql_username = 'root'  # 在引号里填写mysql用户名
-mysql_passwd = '123456'  # 在引号里填写mysql密码
+mysql_username = 'sdba'  # 在引号里填写mysql用户名
+mysql_passwd = 'sdba'  # 在引号里填写mysql密码
 lockfile = "/infinityfs1/hivedata-bak/config/drop_history_tables.lock"
 logfile = 'drop_history_tables.log'
 config_file = "/infinityfs1/hivedata-bak/config/hive_backup.cfg"
@@ -199,7 +199,7 @@ if __name__ == '__main__':
             else:
                 # 之前运行过，时间脚本存在
                 # 处理时间逻辑
-                excute_time_day=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})', excute_time).group(1), '%Y-%m-%d')
+                excute_time_day = datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})', excute_time).group(1), '%Y-%m-%d')
                 print("excute_time_day is %s:" % excute_time_day)
                 time_now_day = datetime.datetime.strptime(datetime.date.today().strftime('%Y-%m-%d'), '%Y-%m-%d')
                 print("time_now_day is %s:" % time_now_day)
@@ -207,18 +207,18 @@ if __name__ == '__main__':
   
                 # 判断日期是否符合周期配置
                 if delta_days >= rate_day:
-                        # 处理时刻
-                        now_time = datetime.datetime.strptime(datetime.datetime.now().strftime('%H-%M-%S'), '%H-%M-%S')
-                        print("time now is %s " % now_time)
-                        # last_time=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',excute_time).group(2),'%H-%M-%S')
-                        last_time = datetime.datetime.strptime(clear_time, '%H-%M-%S')
-                        print("time now is %s " % last_time)
-                        # 真正的运行时间其实是一个范围，配置文件中的MYSQL_CLEAR_TIME加上sleep的时间之间
-                        if 0 <= (now_time-last_time).seconds < 3600:
-                            # 执行清除历史数据表的操作
-                            conti = drop_history_tables()
-                            if conti is False:
-                                fcntl.flock(f, fcntl.LOCK_UN)
-                                continue
+                    # 处理时刻
+                    now_time = datetime.datetime.strptime(datetime.datetime.now().strftime('%H-%M-%S'), '%H-%M-%S')
+                    print("time now is %s " % now_time)
+                    # last_time=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',excute_time).group(2),'%H-%M-%S')
+                    last_time = datetime.datetime.strptime(clear_time, '%H-%M-%S')
+                    print("time now is %s " % last_time)
+                    # 真正的运行时间其实是一个范围，配置文件中的MYSQL_CLEAR_TIME加上sleep的时间之间
+                    if 0 <= (now_time-last_time).seconds < 3600:
+                        # 执行清除历史数据表的操作
+                        conti = drop_history_tables()
+                        if conti is False:
+                            fcntl.flock(f, fcntl.LOCK_UN)
+                            continue
             time.sleep(3600)
             fcntl.flock(f, fcntl.LOCK_UN)
