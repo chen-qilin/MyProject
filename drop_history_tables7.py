@@ -18,7 +18,7 @@ import stat
 
 __Author__ = 'chenqilin'
 
-server_vip = '172.16.131.48' # 在引号里填写集群vip
+server_vip = '172.16.131.48'  # 在引号里填写集群vip
 mysql_username = 'sdba'  # 在引号里填写mysql用户名
 mysql_passwd = 'sdba'  # 在引号里填写mysql密码
 lockfile = "/infinityfs1/hivedata-bak/config/drop_history_tables.lock"
@@ -27,7 +27,7 @@ config_file = "/infinityfs1/hivedata-bak/config/hive_backup.cfg"
 time_file = "/infinityfs1/hivedata-bak/config/drop_history_tables.time"
 
 
-def newcmp(a,b):
+def newcmp(a, b):
     # 定义函数判断日期前的字符是否相同，不同返回a
     a_re = re.match(r'^(\w+)_(20[0-9]{4})$', a)
     b_re = re.match(r'^(\w+)_(20[0-9]{4})$', b)
@@ -40,7 +40,7 @@ def read_config(config_file, item):
     content = ''
     try:
         with open(config_file, 'r') as fcon:
-            lines=fcon.readlines()
+            lines = fcon.readlines()
             for line in lines:
                 if item in line:
                     content = re.split('=', line)[1].strip().replace('\n', '').replace('\t', '')
@@ -53,10 +53,11 @@ def read_config(config_file, item):
 def drop_history_tables():
     # 建立mysql连接
     try:
-        connection = pymysql.connect(host=server_vip, port=3306, user=mysql_username, passwd=mysql_passwd, db='information_schema')
-    except Exception as e:
-        print("Connect Failed---->%s" % e)
-        logging.error("%s", e)
+        connection = pymysql.connect(host=server_vip, port=3306, user=mysql_username,
+                                     passwd=mysql_passwd, db='information_schema')
+    except Exception as ee:
+        print("Connect Failed---->%s" % ee)
+        logging.error("%s", ee)
         connection.close()
         return False
 
@@ -75,7 +76,7 @@ def drop_history_tables():
         logging.info("The number of historical tables is %d :", count)
         
         # 获取所有历史数据表
-        all_list = []
+        all_list = list()
         for i in result:
             logging.info("%s", i)
             all_list.append(i[0])
@@ -87,7 +88,7 @@ def drop_history_tables():
         old_list = all_list[:]
         for i in range(count-1):
             j = i+1
-            tmp = newcmp(all_list[i],all_list[j])
+            tmp = newcmp(all_list[i], all_list[j])
             if tmp:
                 new_list.append(tmp)
                 old_list.remove(tmp)
@@ -125,33 +126,46 @@ def drop_history_tables():
         logging.debug(100*"*")
 
 
-def get_excute_time(time_file,new_excute_time):
+def get_excute_time(time_file, new_excute_time):
     # 获取时间文件中的数据，如果不存在就创建时间文件
-    excute_time=''
-    status=False
+    excute_time = ''
+    status = False
     # 如果文件存在且记录的内容正确则置标志位True
     if os.path.exists(time_file):
-        os.chmod(time_file, stat.S_IRWXU|stat.S_IRWXG|stat.S_IRWXO)
+        os.chmod(time_file, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
         try:
             with open(time_file, 'r+') as fcon:
                 excute_time = fcon.read().strip().replace('\n', '').replace('\t', '')
-                match_result=re.match('\d{4}(-\d{2}){5}', excute_time)
+                match_result = re.match('\d{4}(-\d{2}){5}', excute_time)
                 if match_result is None:
                     logging.info("The excute time recored on the time file is not matched,"
                                  "write the current time as the new excute time to it.")
                 else:
                     status = True
-                # fcon.write(new_excute_time)
-        except IOError as e:
-            logging.error("Some error occured when read the excute_time file. ",e)
+        except IOError as ee:
+            logging.error("Some error occured when read the excute_time file. ", ee)
     else:
         logging.info("The excute time is not exists. Make file now")
         try:
             with open(time_file, 'w+') as fcon:
                 fcon.write(new_excute_time)
-        except IOError as e:
-            logging.error("Some error occured when write the excute_time file. ", e)
+        except IOError as ee:
+            logging.error("Some error occured when write the excute_time file. ", ee)
     return status, excute_time
+
+
+def write_excute_time(time_file, new_excute_time):
+    """
+    write the excute time to time file
+    """
+
+    if os.path.exists(time_file):
+        os.chmod(time_file, stat.S_IRWXU|stat.S_IRWXG|stat.S_IRWXO)
+    try:
+        with open(time_file, 'w+') as fcon:
+            fcon.write(new_excute_time)
+    except IOError as e:
+        logging.error("Some error occured when write the excute_time file in handle the write_excute_time. %s", e)
 
 
 if __name__ == '__main__':
@@ -165,9 +179,9 @@ if __name__ == '__main__':
 
     # 读取配置文件
     BACKUP_ROOT_PATH = read_config(config_file, 'HIVE_BACKUP_ROOT_PATH')
-    rate_day=int(read_config(config_file, 'MYSQL_CLEAR_RATE'))
-    clear_time=read_config(config_file, 'MYSQL_CLEAR_TIME').replace(':', '-')
-    new_excute_time=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    rate_day = int(read_config(config_file, 'MYSQL_CLEAR_RATE'))
+    clear_time = read_config(config_file, 'MYSQL_CLEAR_TIME').replace(':', '-')
+    new_excute_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     print(rate_day, clear_time, new_excute_time)
 
     while True:
@@ -199,7 +213,8 @@ if __name__ == '__main__':
             else:
                 # 之前运行过，时间脚本存在
                 # 处理时间逻辑
-                excute_time_day = datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})', excute_time).group(1), '%Y-%m-%d')
+                excute_time_day = datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',
+                                                                      excute_time).group(1), '%Y-%m-%d')
                 print("excute_time_day is %s:" % excute_time_day)
                 time_now_day = datetime.datetime.strptime(datetime.date.today().strftime('%Y-%m-%d'), '%Y-%m-%d')
                 print("time_now_day is %s:" % time_now_day)
@@ -210,12 +225,14 @@ if __name__ == '__main__':
                     # 处理时刻
                     now_time = datetime.datetime.strptime(datetime.datetime.now().strftime('%H-%M-%S'), '%H-%M-%S')
                     print("time now is %s " % now_time)
-                    # last_time=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',excute_time).group(2),'%H-%M-%S')
+                    # last_time=datetime.datetime.strptime(re.match('(\d{4}-\d{2}-\d{2})-(\d{2}-\d{2}-\d{2})',
+                    # excute_time).group(2),'%H-%M-%S')
                     last_time = datetime.datetime.strptime(clear_time, '%H-%M-%S')
                     print("time now is %s " % last_time)
                     # 真正的运行时间其实是一个范围，配置文件中的MYSQL_CLEAR_TIME加上sleep的时间之间
                     if 0 <= (now_time-last_time).seconds < 3600:
                         # 执行清除历史数据表的操作
+                        write_excute_time(time_file, datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
                         conti = drop_history_tables()
                         if conti is False:
                             fcntl.flock(f, fcntl.LOCK_UN)
